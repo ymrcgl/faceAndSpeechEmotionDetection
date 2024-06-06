@@ -1,0 +1,67 @@
+{% extends 'main.html' %}
+{% block content %}
+<center>
+    <img style="box-shadow: 0 0 10px black;" class="img img-fluid img-thumbnail" src="{{ url_for('video_feed') }}">
+    <br><br>
+    <audio controls id="audioControl"></audio> <!-- Ses çalma kontrolü -->
+    <p id="emotionPrediction"></p> <!-- Duygu tahmini gösterilecek alan -->
+    <button id="recordButton" class="btn btn-primary">Ses Kaydı Başlat</button> <!-- Ses kaydı düğmesi -->
+    <!-- Ortak tahmin sonucunu göstermek için bir alan -->
+    <p id="combinedEmotion"></p>
+</center>
+
+<script>
+    document.getElementById('recordButton').onclick = function() {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+
+                mediaRecorder.start();
+
+                mediaRecorder.ondataavailable = function(event) {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = function() {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+
+                    const audioElement = document.getElementById('audioControl');
+                    audioElement.src = audioUrl;
+
+                    const formData = new FormData();
+                    formData.append('file', audioBlob);
+
+                    fetch('/predict_voice', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Duygu tahminini gösterilecek paragraf elementine yazdırma
+                        document.getElementById('emotionPrediction').innerText = 'Tahmin Edilen Duygu: ' + data.emotion;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+
+                    // Ortak tahmini almak için bir istek yapma
+                    fetch('/predict_combined')
+                        .then(response => response.json())
+                        .then(data => {
+                            // Ortak tahmini gösterilecek paragraf elementine yazdırma
+                            document.getElementById('combinedEmotion').innerText = 'Ortak Tahmin: ' + JSON.stringify(data.emotions);
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                        });
+                };
+
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                }, 3000); // 3 saniye kayıt
+            });
+    };
+</script>
+{% endblock %}
